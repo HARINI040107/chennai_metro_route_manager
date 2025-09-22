@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Train Route Manager - Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+    }
+    /* Sidebar */
+    .sidebar {
+      width: 220px;
+      background: #24292f;
+      color: white;
+      height: 100vh;
+      padding: 20px 10px;
+      position: fixed;
+    }
+    .sidebar h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .sidebar a {
+      display: block;
+      color: white;
+      text-decoration: none;
+      padding: 12px;
+      margin: 5px 0;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .sidebar a:hover, .sidebar a.active {
+      background: #0366d6;
+    }
+    /* Main Content */
+    .main {
+      margin-left: 220px;
+      padding: 20px;
+      flex: 1;
+      background: #f4f4f4;
+      min-height: 100vh;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <h2>🚇 Dashboard</h2>
+    <a href="index.html">Route Finder</a>
+    <a href="#" onclick="showSection('map', this)">Metro Map</a>
+    <a href="#" onclick="showSection('about', this)">About</a>
+    <a href="homepage.html">Back to Home</a>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Default welcome message -->
+    <div id="welcome" class="card">
+      <h3>Welcome</h3>
+      <p>🚇 The Chennai Metro Route Manager helps you plan your journey quickly, showing routes, estimated time, and maps - making city travel smarter and easier.</p>
+    </div>
+
+    <!-- Route Finder section -->
+    <div id="route" class="card hidden">
+      <h3>Route Finder</h3>
+      <p>(Route Finder interface will appear here)</p>
+    </div>
+
+    <!-- Map section -->
+    <div id="map" class="card hidden">
+      <h3>Metro Map</h3>
+      <img src="metro-map.jpeg" alt="Chennai Metro Map" style="width:100%; border-radius:10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+    </div>
+
+    <!-- About section -->
+    <div id="about" class="card hidden">
+      <h3>About</h3>
+      <p>This Train Route Manager helps you find the shortest path between metro stations using Dijkstra’s Algorithm.
+      Built with HTML, CSS, and JavaScript.</p>
+    </div>
+  </div>
+
+  <script>
+    function showSection(sectionId, linkElement) {
+      // Prevent default link behavior
+      event.preventDefault();
+
+      // Hide all sections
+      const sections = ['welcome', 'route', 'map', 'about'];
+      sections.forEach(id => document.getElementById(id).classList.add('hidden'));
+
+      // Show selected section
+      document.getElementById(sectionId).classList.remove('hidden');
+
+      // Highlight active link
+      document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+      if(linkElement) linkElement.classList.add('active');
+
+      // Scroll to top
+      window.scrollTo(0,0);
+    }
+  </script>
+</body>
+</html>

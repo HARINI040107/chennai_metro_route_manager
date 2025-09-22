@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chennai Metro Route Manager (Dijkstra)</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f3f6f9;margin:0;padding:24px;text-align:center}
+    .container{max-width:880px;margin:24px auto;padding:26px;background:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.08)}
+    h1{margin:6px 0 18px;font-size:28px}
+    label{display:block;text-align:left;margin:10px 0 6px;font-weight:600}
+    select,button{width:100%;padding:12px;border-radius:8px;border:1px solid #cfd8e3;box-sizing:border-box}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:700px){.row{grid-template-columns:1fr}}
+    button{background:#0b5f66;color:#fff;border:0;margin-top:8px;cursor:pointer;font-weight:600}
+    button:hover{background:#0e7280}
+    #result{margin-top:22px;text-align:left;padding:12px;border-radius:8px;background:#fafbfc;min-height:60px}
+    .highlight{color:#c9302c;font-weight:700}
+    .meta{margin-top:8px;color:#334155}
+    .route-line{font-size:18px;line-height:1.7}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚇 Chennai Metro Route Manager — Weighted (Dijkstra)</h1>
+
+    <div class="row">
+      <div>
+        <label for="source">Source</label>
+        <select id="source"></select>
+      </div>
+      <div>
+        <label for="destination">Destination</label>
+        <select id="destination"></select>
+      </div>
+    </div>
+
+    <button id="findBtn">Find Shortest-Time Route</button>
+
+    <div id="result">
+      <div class="meta">Select source &amp; destination and click <strong>Find Shortest-Time Route</strong>.</div>
+    </div>
+  </div>
+
+  <script>
+    /******************************************************************
+     * 1) EDGE LIST (undirected weighted graph)
+     *    We list station-to-station edges once; the code below builds a
+     *    bidirectional adjacency map from this list (so both directions
+     *    always exist and remain consistent).
+     *
+     *    We included the northern stations (Wimco Nagar → Tiruvottriyur → ...
+     *    Tondiarpet → Sir Thiyagaraya College → Washermanpet → Mannadi ...).
+     *
+     *    Weights are approximate travel time (minutes) between adjacent stations.
+     ******************************************************************/
+    const edges = [
+      // northern Blue extension
+      ["Wimco Nagar","Tiruvottriyur",3],
+      ["Tiruvottriyur","Tiruvottriyur Theradi",2],
+      ["Tiruvottriyur Theradi","Kaladipet",2],
+      ["Kaladipet","Tollgate",2],
+      ["Tollgate","New Washermanpet",2],
+      ["New Washermanpet","Tondiarpet",2],
+      ["Tondiarpet","Sir Thiyagaraya College",2],
+      ["Sir Thiyagaraya College","Washermanpet",2],
+      ["Washermanpet","Mannadi",3],
+      ["Mannadi","High Court",3],
+      ["High Court","Chennai Central",4],
+      // central -> south/blue main trunk
+      ["Chennai Central","Government Estate",3],
+      ["Government Estate","LIC",2],
+      ["LIC","Thousand Lights",3],
+      ["Thousand Lights","AG-DMS",2],
+      ["AG-DMS","Teynampet",3],
+      ["Teynampet","Nandanam",2],
+      ["Nandanam","Saidapet",4],
+      ["Saidapet","Little Mount",3],
+      ["Little Mount","Guindy",4],
+      ["Guindy","Alandur",2],
+      ["Alandur","St. Thomas Mount",3],
+      ["Alandur","Ekkatuthangal",2],
+      ["Ekkatuthangal","Ashok Nagar",3],
+      ["Ashok Nagar","Vadapalani",2],
+      ["Vadapalani","Arumbakkam",3],
+      ["Arumbakkam","CMBT",2],
+      ["CMBT","Koyambedu",3],
+      ["Koyambedu","Thirumangalam",4],
+      ["Thirumangalam","Anna Nagar Tower",3],
+      ["Anna Nagar Tower","Anna Nagar East",2],
+      ["Anna Nagar East","Shenoy Nagar",2],
+      ["Shenoy Nagar","Pachaiyappa's College",3],
+      ["Pachaiyappa's College","Kilpauk",2],
+      ["Kilpauk","Nehru Park",2],
+      ["Nehru Park","Egmore",3],
+      ["Egmore","Chennai Central",5],
+      // airport branch (south-west)
+      ["Meenambakkam","Airport",2],
+      ["Meenambakkam","Nanganallur Road",3],
+      ["Nanganallur Road","Alandur",4]
+    ];
+
+    /******************************************************************
+     * Build adjacency map (bidirectional) from edges array:
+     * { stationName: [ { node: ..., weight: ... }, ... ] }
+     ******************************************************************/
+    const adjacency = {};
+    function addEdge(a,b,w){
+      if(!adjacency[a]) adjacency[a]=[];
+      if(!adjacency[b]) adjacency[b]=[];
+      adjacency[a].push({node:b, weight:w});
+      adjacency[b].push({node:a, weight:w});
+    }
+    edges.forEach(e => addEdge(e[0], e[1], e[2]));
+
+    /******************************************************************
+     * Populate dropdowns with station list
+     ******************************************************************/
+    const stations = Object.keys(adjacency).sort((a,b)=>a.localeCompare(b));
+    const src = document.getElementById("source");
+    const dst = document.getElementById("destination");
+    stations.forEach(s=>{
+      const o1 = document.createElement("option"); o1.value=s; o1.textContent=s; src.appendChild(o1);
+      const o2 = document.createElement("option"); o2.value=s; o2.textContent=s; dst.appendChild(o2);
+    });
+    // default selections (just convenience)
+    src.value = "Wimco Nagar";
+    dst.value = "Airport";
+
+    const interchangeStations = ["Alandur","Chennai Central","Egmore"]; // example list to highlight
+
+    /******************************************************************
+     * Dijkstra's shortest path (using simple O(n^2) selection)
+     * Suitable for this small graph. Returns {dist, path} where dist is minutes.
+     ******************************************************************/
+    function dijkstra(start, target) {
+      if(!adjacency[start] || !adjacency[target]) return null;
+
+      const dist = {};
+      const prev = {};
+      const Q = new Set(stations);
+
+      stations.forEach(n => dist[n] = Infinity);
+      dist[start] = 0;
+
+      while(Q.size){
+        // extract node u in Q with minimum dist
+        let u = null;
+        let best = Infinity;
+        Q.forEach(node => {
+          if(dist[node] < best){ best = dist[node]; u = node; }
+        });
+
+        if(u === null || best === Infinity) break;
+        Q.delete(u);
+
+        if(u === target) break;
+
+        const neighbors = adjacency[u] || [];
+        neighbors.forEach(nb => {
+          const alt = dist[u] + nb.weight;
+          if(alt < dist[nb.node]){
+            dist[nb.node] = alt;
+            prev[nb.node] = u;
+          }
+        });
+      }
+
+      if(dist[target] === Infinity) return null;
+
+      // reconstruct path
+      const path = [];
+      let cur = target;
+      while(cur !== undefined){
+        path.push(cur);
+        cur = prev[cur];
+      }
+      path.reverse(); // start -> ... -> target
+
+      return { distance: dist[target], path };
+    }
+
+    /******************************************************************
+     * UI: find route & show result
+     ******************************************************************/
+    document.getElementById("findBtn").addEventListener("click", () => {
+      const s = src.value;
+      const t = dst.value;
+      const resultDiv = document.getElementById("result");
+
+      if(s === t){
+        resultDiv.innerHTML = "<div style='color:#c00;font-weight:700'>Source and destination must be different.</div>";
+        return;
+      }
+
+      const r = dijkstra(s,t);
+      if(!r){
+        resultDiv.innerHTML = "<div style='color:#c00;font-weight:700'>No route found between these stations.</div>";
+        return;
+      }
+
+      // highlight interchange stations in the displayed route
+      const display = r.path.map(st => interchangeStations.includes(st) ? `<span class='highlight'>${st}</span>` : st).join(" ➜ ");
+
+      resultDiv.innerHTML = `
+        <div><strong>Route (${r.path.length} stations):</strong></div>
+        <div class="route-line">${display}</div>
+        <div style="margin-top:10px"><strong>Estimated travel time:</strong> ${r.distance} minutes</div>
+        <div style="margin-top:6px;color:#556">${r.path.length-1} hops · weights represent minutes per segment</div>
+      `;
+    });
+
+    // helpful: allow Enter to trigger
+    document.getElementById("destination").addEventListener("keydown", e => {
+      if(e.key === "Enter") document.getElementById("findBtn").click();
+    });
+  </script>
+</body>
+</html>
